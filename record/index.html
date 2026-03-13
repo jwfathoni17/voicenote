@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Google Fonts: Newsreader -->
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap"
+    rel="stylesheet" />
+  <!-- Preload critical images -->
+  <link rel="preload" as="image" href="/assets/handle_turn-Cuf3WVzW.png" fetchpriority="high" />
+  <!-- TODO: Set the document title to the name of your application -->
+  <title>Voice Note Keepsake</title>
+  <meta name="description" content="Someone made a voice note keepsake for you!" />
+  <meta name="author" content="@jwfathoni" />
+
+  <meta property="og:title" content="Voice Note Keepsake" />
+  <meta property="og:description" content="Someone made a voice note keepsake for you!" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/og-image.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@mjwfathoni" />
+  <meta name="twitter:image" content="/og-image.png" />
+  <script type="module" crossorigin src="/assets/index-BvCdskUI.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-BZtBH4d1.css" />
+  <style>
+    a[href="/about"] {
+      display: none !important;
+    }
+  </style>
+  <script src="/storage.js"></script>
+  <script defer src="https://littlevoicenote.com/~flock.js"
+    data-proxy-url="https://littlevoicenote.com/~api/analytics"></script>
+  <style>
+    a[href="/about"] {
+      display: none !important;
+    }
+    #gallery-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Newsreader', serif;
+    }
+    #gallery-content {
+      background: #1a1a1a;
+      padding: 2rem;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      color: #fef3c7;
+    }
+    .memory-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      border-bottom: 1px solid rgba(251, 191, 36, 0.1);
+    }
+    .memory-item button {
+      background: #78624a;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      margin-left: 0.5rem;
+    }
+    #gallery-toggle {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 500;
+      background: rgba(26,26,26,0.8);
+      border: 1px solid rgba(251, 191, 36, 0.2);
+      color: #fef3c7;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #admin-login {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: #000;
+        z-index: 2000;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Newsreader', serif;
+        color: #fef3c7;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <div id="admin-login">
+      <h2>Admin Access</h2>
+      <input type="password" id="admin-pass" placeholder="Password" style="background:#1a1a1a; color:#fff; border:1px solid #78624a; padding:10px; margin-bottom:10px;">
+      <button onclick="checkAdmin()" style="background:#78624a; color:white; border:none; padding:10px 20px; cursor:pointer;">Login</button>
+  </div>
+  <button id="gallery-toggle" onclick="toggleGallery()">Memories</button>
+  <div id="gallery-modal" onclick="if(event.target === this) toggleGallery()">
+    <div id="gallery-content">
+      <h2 style="margin-top:0">My Memories</h2>
+      <div id="memory-list"></div>
+      <button onclick="toggleGallery()" style="margin-top:1rem; width:100%">Close</button>
+    </div>
+  </div>
+
+  <script>
+    async function toggleGallery() {
+      const modal = document.getElementById('gallery-modal');
+      const list = document.getElementById('memory-list');
+      if (modal.style.display === 'flex') {
+        modal.style.display = 'none';
+      } else {
+        const memories = await window.voiceNoteStorage.list();
+        const active = await window.voiceNoteStorage.getActive();
+        list.innerHTML = memories.map(m => {
+          const isActive = active && active.id === m.id;
+          return `
+            <div class="memory-item" style="${isActive ? 'border-left: 4px solid #FBBF24;' : ''}">
+              <div style="display:flex; flex-direction:column">
+                <span style="font-size:0.85rem">${new Date(m.timestamp).toLocaleString()}</span>
+                ${isActive ? '<span style="color:#FBBF24; font-size:0.75rem; font-weight:bold">ACTIVE</span>' : ''}
+              </div>
+              <div>
+                <button onclick="selectMemory(${m.id})">${isActive ? 'Active' : 'Select'}</button>
+                <button onclick="deleteMemory(${m.id})" style="background:#cc4444">Delete</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+        modal.style.display = 'flex';
+      }
+    }
+
+    async function selectMemory(id) {
+      await window.voiceNoteStorage.setActive(id);
+      window.location.href = "/";
+    }
+
+    async function deleteMemory(id) {
+      if (confirm('Delete this memory?')) {
+        await window.voiceNoteStorage.delete(id);
+        toggleGallery();
+        toggleGallery(); // refresh
+      }
+    }
+
+    function checkAdmin() {
+        const pass = document.getElementById('admin-pass').value;
+        if (pass === 'jwfathoni') {
+            sessionStorage.setItem('admin_auth', 'true');
+            document.getElementById('admin-login').style.display = 'none';
+            document.getElementById('gallery-toggle').style.display = 'block';
+            window.location.reload();
+        } else {
+            alert('Wrong password');
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        if (window.location.pathname.startsWith('/record')) {
+            if (sessionStorage.getItem('admin_auth') !== 'true') {
+                document.getElementById('admin-login').style.display = 'flex';
+            } else {
+                document.getElementById('gallery-toggle').style.display = 'block';
+            }
+        }
+    });
+  </script>
+</body>
+
+</html>
