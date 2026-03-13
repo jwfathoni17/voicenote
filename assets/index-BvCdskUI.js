@@ -17942,6 +17942,12 @@ function K0() {
     f = b.useRef(null),
     d = b.useRef(!1),
     v = b.useRef(!1),
+    p0 = b.useRef(null),
+    p1 = b.useRef(null),
+    p2 = b.useRef(null),
+    p3 = b.useRef(null),
+    p4 = b.useRef(null),
+    p5 = b.useRef(null),
     p = b.useCallback(async (k) => {
       let C = null;
       try {
@@ -18009,21 +18015,39 @@ function K0() {
         const T = C.createMediaElementSource(k);
         (h.current = T), (d.current = !0);
         const R = C.createBiquadFilter();
-        (R.type = "highpass"), (R.frequency.value = 300), (R.Q.value = 0.7);
+        (R.type = "highpass"), (R.frequency.value = 400), (R.Q.value = 0.8);
         const D = C.createBiquadFilter();
-        (D.type = "lowpass"), (D.frequency.value = 3500), (D.Q.value = 0.7);
+        (D.type = "lowpass"), (D.frequency.value = 3000), (D.Q.value = 0.8);
         const L = C.createBiquadFilter();
         (L.type = "peaking"),
-          (L.frequency.value = 1e3),
-          (L.Q.value = 1),
-          (L.gain.value = 3);
+          (L.frequency.value = 1200),
+          (L.Q.value = 1.2),
+          (L.gain.value = 5);
         const H = C.createWaveShaper();
-        (H.curve = IC(2)), (H.oversample = "2x");
+        (H.curve = IC(3)), (H.oversample = "2x");
         const M = C.createGain();
-        M.gain.value = 1.2;
+        M.gain.value = 1.3;
         const Y = C.createGain();
+        (Y.gain.value = 0.8);
+        
+        // Add romantic static/crackle
+        const noiseSize = C.sampleRate * 2;
+        const noiseBuf = C.createBuffer(1, noiseSize, C.sampleRate);
+        const crackleBuf = C.createBuffer(1, noiseSize, C.sampleRate);
+        const nData = noiseBuf.getChannelData(0);
+        const cData = crackleBuf.getChannelData(0);
+        for(let i=0; i<noiseSize; i++) {
+            nData[i] = (Math.random() * 2 - 1) * 0.02;
+            if(Math.random() < 0.0005) cData[i] = (Math.random() * 2 - 1) * 0.1;
+        }
+        
+        const nGain = C.createGain(); nGain.gain.value = 0.05;
+        const cGain = C.createGain(); cGain.gain.value = 0.03;
+        nGain.connect(Y); cGain.connect(Y);
+        p0.current = noiseBuf; p1.current = crackleBuf;
+        p4.current = nGain; p5.current = cGain;
+
         return (
-          (Y.gain.value = 0.85),
           T.connect(M)
             .connect(R)
             .connect(D)
@@ -18031,7 +18055,7 @@ function K0() {
             .connect(H)
             .connect(Y)
             .connect(C.destination),
-          console.log("Vintage radio effect applied"),
+          console.log("Romantic vintage radio effect applied"),
           !0
         );
       } catch (C) {
@@ -18072,6 +18096,8 @@ function K0() {
               }),
               R.addEventListener("ended", () => {
                 e(!1), n(0);
+                p2.current && (p2.current.stop(), p2.current = null);
+                p3.current && (p3.current.stop(), p3.current = null);
               }),
               R.load();
           }),
@@ -18099,6 +18125,18 @@ function K0() {
           c.current.resume().catch((R) => {
             console.warn("AudioContext resume failed:", R);
           })),
+          p0.current && !p2.current && (() => {
+            const ns = c.current.createBufferSource();
+            ns.buffer = p0.current; ns.loop = !0;
+            ns.connect(p4.current); ns.start(0);
+            p2.current = ns;
+          })(),
+          p1.current && !p3.current && (() => {
+            const cs = c.current.createBufferSource();
+            cs.buffer = p1.current; cs.loop = !0;
+            cs.connect(p5.current); cs.start(0);
+            p3.current = cs;
+          })(),
           d.current ||
             (console.log("Ensuring vintage effect chain is connected..."),
             x(k)),
@@ -18116,6 +18154,8 @@ function K0() {
     }, [x]),
     _ = b.useCallback(() => {
       u.current && (u.current.pause(), e(!1));
+      p2.current && (p2.current.stop(), p2.current = null);
+      p3.current && (p3.current.stop(), p3.current = null);
     }, []),
     S = b.useCallback(
       (k) => {
