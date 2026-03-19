@@ -10,7 +10,6 @@ export default async function handler(request, response) {
       onBeforeGenerateToken: async (pathname) => {
         // Allows the browser to securely upload files directly up to 500 MB
         return {
-          allowedContentTypes: ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/mp3', 'image/jpeg', 'image/png'],
           tokenPayload: JSON.stringify({}),
         };
       },

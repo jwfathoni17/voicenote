@@ -43,6 +43,10 @@ window.voiceNoteStorage = {
       });
       const kvData = await kvRes.json();
       
+      if (!kvRes.ok) {
+        throw new Error(kvData.error || 'Failed to save memory to KV');
+      }
+      
       return kvData.record;
     } catch (e) {
       console.error("Save failed:", e);
@@ -124,11 +128,15 @@ window.voiceNoteStorage = {
         recordUpdates.photos = photoUrls;
       }
 
-      await fetch('/api/memories', {
+      const kvRes = await fetch('/api/memories', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(recordUpdates)
       });
+      const kvData = await kvRes.json();
+      if (!kvRes.ok) {
+        throw new Error(kvData.error || 'Failed to edit memory in KV');
+      }
       return true;
     } catch (e) {
       console.error("Edit failed:", e);
