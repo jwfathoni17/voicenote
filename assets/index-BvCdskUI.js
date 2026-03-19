@@ -17850,7 +17850,7 @@ function NC(t, e) {
     [u, l, c, n, s, r, t, i, o, a]
   );
 }
-function jC(t = 60) {
+function jC(t = 3600) {
   const [e, r] = b.useState(!1),
     [n, s] = b.useState(0),
     [i, o] = b.useState(null),
@@ -18779,7 +18779,7 @@ const Fh = ({ onRotationChange: t, isPlaying: e, hideHint: r = !1 }) => {
               w.jsx("span", { children: i(e) }),
               w.jsx("span", {
                 className: "text-amber-200/50",
-                children: "/ 1:00",
+                children: "/ 60:00",
               }),
             ],
           }),
