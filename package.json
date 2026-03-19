@@ -1,0 +1,25 @@
+{
+  "name": "littlevoicenote.com",
+  "version": "1.0.0",
+  "description": "",
+  "main": "flock.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwfathoni17/voicenote.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jwfathoni17/voicenote/issues"
+  },
+  "homepage": "https://github.com/jwfathoni17/voicenote#readme",
+  "dependencies": {
+    "@vercel/blob": "^2.3.1",
+    "@vercel/kv": "^3.0.0"
+  }
+}

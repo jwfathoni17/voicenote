@@ -1,108 +1,109 @@
-
-const DB_NAME = 'VoiceNoteKeepsakeDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'memories';
-
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
 window.voiceNoteStorage = {
   async save(photos, audioBlob) {
-    const db = await initDB();
-    // Convert photo blobs to local data or just store metadata if they are external
-    // If they are local Blob URLs from URL.createObjectURL, we need to convert them to Blobs to persist
-    const photoBlobs = await Promise.all(photos.map(async p => {
-        if (typeof p.imageUrl === 'string' && p.imageUrl.startsWith('blob:')) {
-            try {
-                const res = await fetch(p.imageUrl);
-                return await res.blob();
-            } catch (e) {
-                console.error("Failed to fetch blob", e);
-                return p.imageUrl;
-            }
-        }
-        return p.imageUrl;
-    }));
+    try {
+      // 1. Upload audio to Vercel Blob
+      const audioRes = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'x-filename': `audio-${Date.now()}.webm`,
+          'content-type': audioBlob.type || 'audio/webm'
+        },
+        body: audioBlob
+      });
+      const audioData = await audioRes.json();
+      if (!audioData.url) throw new Error('Audio upload failed');
 
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      // 2. Upload photos to Vercel Blob
+      const photoUrls = await Promise.all(photos.map(async (p, idx) => {
+        let photoBlob;
+        if (typeof p.imageUrl === 'string' && p.imageUrl.startsWith('blob:')) {
+          const res = await fetch(p.imageUrl);
+          photoBlob = await res.blob();
+        } else {
+          return p.imageUrl || p;
+        }
+
+        const photoRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: {
+            'x-filename': `photo-${Date.now()}-${idx}.jpg`,
+            'content-type': photoBlob.type || 'image/jpeg'
+          },
+          body: photoBlob
+        });
+        const photoData = await photoRes.json();
+        return photoData.url;
+      }));
+
+      // 3. Save to KV
       const record = {
+        id: Date.now(),
         timestamp: Date.now(),
-        photos: photoBlobs,
-        audio: audioBlob,
+        photos: photoUrls,
+        audioUrl: audioData.url,
         active: true
       };
+
+      const kvRes = await fetch('/api/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+      });
+      const kvData = await kvRes.json();
       
-      // Deactivate others
-      store.openCursor().onsuccess = (event) => {
-        const cursor = event.target.result;
-        if (cursor) {
-          const data = cursor.value;
-          data.active = false;
-          cursor.update(data);
-          cursor.continue();
-        } else {
-          store.add(record);
-          resolve();
-        }
-      };
-      transaction.onerror = () => reject(transaction.error);
-    });
+      return kvData.record;
+    } catch (e) {
+      console.error("Save failed:", e);
+      throw e;
+    }
   },
 
   async list() {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.getAll();
-      request.onsuccess = () => resolve(request.result);
-    });
+    try {
+      const res = await fetch('/api/memories');
+      return await res.json();
+    } catch (e) {
+      console.error("List failed:", e);
+      return [];
+    }
   },
 
   async getActive() {
     const memories = await this.list();
-    return memories.find(m => m.active) || (memories.length > 0 ? memories[memories.length - 1] : null);
+    const activeData = memories.find(m => m.active) || (memories.length > 0 ? memories[memories.length - 1] : null);
+    if (!activeData) return null;
+    
+    // Fetch the audio and convert to Blob for frontend compatibility (ArrayBuffer requirement)
+    let audioBlob = null;
+    if (activeData.audioUrl) {
+      try {
+        const res = await fetch(activeData.audioUrl);
+        audioBlob = await res.blob();
+      } catch (e) {
+        console.error("Failed fetching active audio blob", e);
+      }
+    }
+    
+    return {
+      ...activeData,
+      audio: audioBlob || activeData.audio,
+      photos: activeData.photos || []
+    };
   },
 
   async setActive(id) {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      store.openCursor().onsuccess = (event) => {
-        const cursor = event.target.result;
-        if (cursor) {
-          const data = cursor.value;
-          data.active = (data.id === id);
-          cursor.update(data);
-          cursor.continue();
-        } else {
-          resolve();
-        }
-      };
+    await fetch('/api/memories', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
     });
   },
 
   async delete(id) {
-    const db = await initDB();
-    return new Promise((resolve) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      store.delete(id);
-      transaction.oncomplete = () => resolve();
+    await fetch('/api/memories', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
     });
   }
 };
