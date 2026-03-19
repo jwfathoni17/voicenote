@@ -36,25 +36,14 @@ export default async function handler(req, res) {
     }
     
     if (req.method === 'PUT') {
-      const payload = req.body;
+      const { id } = req.body;
       const rawData = await redis.get(KEY);
       let memories = rawData ? JSON.parse(rawData) : [];
       
-      memories = memories.map(m => {
-        if (m.id === payload.id) {
-          return {
-            ...m,
-            audioUrl: payload.audioUrl || m.audioUrl,
-            photos: payload.photos || m.photos,
-            active: payload.active !== undefined ? payload.active : m.active
-          };
-        }
-        return m;
-      });
-      
-      if (payload.active === true) {
-        memories = memories.map(m => ({ ...m, active: m.id === payload.id }));
-      }
+      memories = memories.map(m => ({
+        ...m,
+        active: m.id === id
+      }));
       
       await redis.set(KEY, JSON.stringify(memories));
       return res.status(200).json({ success: true });

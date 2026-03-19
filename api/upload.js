@@ -1,26 +1,29 @@
-import { handleUpload } from '@vercel/blob/client';
+import { put } from '@vercel/blob';
 
-export default async function handler(request, response) {
-  const body = request.body;
+export const config = {
+  api: {
+    bodyParser: false, // Disables standard body parser so we can receive the raw bit stream of the file
+  },
+};
 
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+  
+  // Custom headers sent by frontend
+  const filename = req.headers['x-filename'] || `file-${Date.now()}.bin`;
+  const contentType = req.headers['content-type'] || 'application/octet-stream';
+  
   try {
-    const jsonResponse = await handleUpload({
-      body: body,
-      request: request,
-      onBeforeGenerateToken: async (pathname) => {
-        // Allows the browser to securely upload files directly up to 500 MB
-        return {
-          tokenPayload: JSON.stringify({}),
-        };
-      },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        console.log("Blob upload completed:", blob.url);
-      },
+    // put() uploads the stream directly to Vercel Blob
+    const blob = await put(filename, req, {
+      access: 'public',
+      contentType: contentType,
     });
-
-    return response.status(200).json(jsonResponse);
+    return res.status(200).json(blob);
   } catch (error) {
-    console.error('Upload Error:', error);
-    return response.status(400).json({ error: error.message });
+    console.error('Blob upload error:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
