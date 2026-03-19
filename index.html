@@ -126,8 +126,11 @@
     <div style="background:#1a1a1a; padding:2rem; border:1px solid rgba(251, 191, 36, 0.2); max-width:500px; width:90%; display:flex; flex-direction:column; gap:1rem;">
       <h2 style="margin-top:0">Edit Memory</h2>
       <div>
-        <label>New Audio (MP3/WebM):</label>
-        <input type="file" id="edit-audio" accept="audio/*" style="width:100%; margin-top:0.5rem;" />
+        <label>New Audio:</label>
+        <div style="display:flex; gap:1rem; margin-top:0.5rem; align-items:center;">
+          <button id="edit-record-btn" onclick="toggleEditRecord()" type="button" style="background:#cc4444; color:white; border:none; padding:0.5rem 1rem; cursor:pointer;">🎙️ Record</button>
+          <span id="edit-record-status" style="color:#fef3c7; font-size:0.9rem;"></span>
+        </div>
       </div>
       <div>
         <label>New Photos:</label>
@@ -183,24 +186,96 @@
     }
 
     let editingId = null;
+    let editMediaRecorder = null;
+    let editAudioChunks = [];
+    let editAudioBlob = null;
+    let editRecordInterval = null;
+    let editRecordSeconds = 0;
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    async function toggleEditRecord() {
+      const btn = document.getElementById('edit-record-btn');
+      const status = document.getElementById('edit-record-status');
+      
+      if (editMediaRecorder && editMediaRecorder.state === 'recording') {
+        editMediaRecorder.stop();
+        clearInterval(editRecordInterval);
+        btn.innerHTML = '🎙️ Record Again';
+        btn.style.background = '#cc4444';
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        editMediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4" });
+        editAudioChunks = [];
+        
+        editMediaRecorder.ondataavailable = e => {
+          if (e.data.size > 0) editAudioChunks.push(e.data);
+        };
+        
+        editMediaRecorder.onstop = () => {
+          editAudioBlob = new Blob(editAudioChunks, { type: editMediaRecorder.mimeType || 'audio/webm' });
+          status.innerText = `Recorded: ${formatTime(editRecordSeconds)}`;
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        editMediaRecorder.start(100);
+        editRecordSeconds = 0;
+        status.innerText = 'Recording... 0:00';
+        btn.innerHTML = '⏹ Stop';
+        btn.style.background = '#78624a';
+        
+        editRecordInterval = setInterval(() => {
+          editRecordSeconds++;
+          status.innerText = `Recording... ${formatTime(editRecordSeconds)}`;
+        }, 1000);
+      } catch (err) {
+        alert("Microphone access denied: " + err.message);
+      }
+    }
+
     function openEditModal(id) {
       editingId = id;
-      document.getElementById('edit-audio').value = '';
+      editAudioBlob = null;
+      document.getElementById('edit-record-btn').innerHTML = '🎙️ Record';
+      document.getElementById('edit-record-btn').style.background = '#cc4444';
+      document.getElementById('edit-record-status').innerText = '';
       document.getElementById('edit-photos').value = '';
+      if(editMediaRecorder && editMediaRecorder.state === 'recording') {
+        editMediaRecorder.stop();
+        clearInterval(editRecordInterval);
+      }
       document.getElementById('edit-modal').style.display = 'flex';
     }
+
     function closeEditModal() {
+      if(editMediaRecorder && editMediaRecorder.state === 'recording') {
+        editMediaRecorder.stop();
+        clearInterval(editRecordInterval);
+      }
       document.getElementById('edit-modal').style.display = 'none';
       editingId = null;
     }
+
     async function saveEdit() {
       if (!editingId) return;
-      const audioFile = document.getElementById('edit-audio').files[0];
+      if (editMediaRecorder && editMediaRecorder.state === 'recording') {
+         editMediaRecorder.stop();
+         clearInterval(editRecordInterval);
+         await new Promise(r => setTimeout(r, 200));
+      }
+
       const photoFiles = document.getElementById('edit-photos').files;
       const btn = document.getElementById('save-edit-btn');
       
-      if (!audioFile && photoFiles.length === 0) {
-        alert("Please select at least an audio or photo file to edit.");
+      if (!editAudioBlob && photoFiles.length === 0) {
+        alert("Please record new audio or select new photos to edit.");
         return;
       }
       
@@ -212,7 +287,7 @@
         if (photoFiles.length > 0) {
           photos = Array.from(photoFiles).map(f => ({ blob: f }));
         }
-        await window.voiceNoteStorage.edit(editingId, photos.length ? photos : null, audioFile || null);
+        await window.voiceNoteStorage.edit(editingId, photos.length ? photos : null, editAudioBlob || null);
         closeEditModal();
         toggleGallery();
         toggleGallery();
