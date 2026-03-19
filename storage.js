@@ -1,19 +1,16 @@
 window.voiceNoteStorage = {
   async save(photos, audioBlob) {
     try {
-      // 1. Upload audio to Vercel Blob
-      const audioRes = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'x-filename': `audio-${Date.now()}.webm`,
-          'content-type': audioBlob.type || 'audio/webm'
-        },
-        body: audioBlob
+      if (!window.vercelBlobUpload) throw new Error("Vercel Blob Client SDK not loaded via ESM");
+
+      // 1. Upload audio directly from client
+      const audioData = await window.vercelBlobUpload(`audio-${Date.now()}.webm`, audioBlob, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
       });
-      const audioData = await audioRes.json();
       if (!audioData.url) throw new Error('Audio upload failed');
 
-      // 2. Upload photos to Vercel Blob
+      // 2. Upload photos directly from client
       const photoUrls = await Promise.all(photos.map(async (p, idx) => {
         let photoBlob;
         if (typeof p.imageUrl === 'string' && p.imageUrl.startsWith('blob:')) {
@@ -23,19 +20,14 @@ window.voiceNoteStorage = {
           return p.imageUrl || p;
         }
 
-        const photoRes = await fetch('/api/upload', {
-          method: 'POST',
-          headers: {
-            'x-filename': `photo-${Date.now()}-${idx}.jpg`,
-            'content-type': photoBlob.type || 'image/jpeg'
-          },
-          body: photoBlob
+        const photoData = await window.vercelBlobUpload(`photo-${Date.now()}-${idx}.jpg`, photoBlob, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
         });
-        const photoData = await photoRes.json();
         return photoData.url;
       }));
 
-      // 3. Save to KV
+      // 3. Save to Redis
       const record = {
         id: Date.now(),
         timestamp: Date.now(),
@@ -105,5 +97,42 @@ window.voiceNoteStorage = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
     });
+  },
+
+  async edit(id, newPhotos, newAudioBlob) {
+    try {
+      if (!window.vercelBlobUpload) throw new Error("Vercel Blob Client SDK not loaded via ESM");
+      
+      let recordUpdates = { id };
+      
+      if (newAudioBlob) {
+        const audioData = await window.vercelBlobUpload(`audio-edit-${Date.now()}.webm`, newAudioBlob, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+        });
+        recordUpdates.audioUrl = audioData.url;
+      }
+
+      if (newPhotos && newPhotos.length > 0) {
+        const photoUrls = await Promise.all(newPhotos.map(async (p, idx) => {
+          const photoData = await window.vercelBlobUpload(`photo-edit-${Date.now()}-${idx}.jpg`, p.blob, {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+          });
+          return photoData.url;
+        }));
+        recordUpdates.photos = photoUrls;
+      }
+
+      await fetch('/api/memories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recordUpdates)
+      });
+      return true;
+    } catch (e) {
+      console.error("Edit failed:", e);
+      throw e;
+    }
   }
 };
